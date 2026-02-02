@@ -1,0 +1,68 @@
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+// Provide Flutter-style defaults for plugins that still expect the old flutter.* extension
+ext.flutter = [
+    // Align with current Android SDK levels; update if your project targets a different SDK
+    compileSdkVersion: 34,
+    minSdkVersion    : 21,
+    targetSdkVersion : 34,
+    // Leave ndkVersion optional; add if your toolchain requires a specific NDK
+]
+
+rootProject.buildDir = '../build'
+subprojects {
+    project.buildDir = "${rootProject.buildDir}/${project.name}"
+    
+    // Auto-add namespace for plugins that don't have one (AGP 8+ requirement)
+    afterEvaluate {
+        if (project.plugins.hasPlugin('com.android.library')) {
+            if (project.android.namespace == null) {
+                def manifestFile = project.file('src/main/AndroidManifest.xml')
+                if (manifestFile.exists()) {
+                    def manifest = new XmlSlurper().parse(manifestFile)
+                    def packageName = manifest.'@package'
+                    if (packageName) {
+                        project.android.namespace = packageName.toString()
+                    }
+                }
+            }
+        }
+    }
+}
+subprojects {
+    project.evaluationDependsOn(':app')
+}
+
+// Force androidx.core/core-ktx to a version compatible with AGP 7.3/compileSdk 34
+subprojects { proj ->
+    proj.configurations.all { config ->
+        config.resolutionStrategy.eachDependency { details ->
+            if (details.requested.group == 'androidx.core' &&
+                    (details.requested.name == 'core' || details.requested.name == 'core-ktx')) {
+                details.useVersion '1.12.0'
+                details.because 'Align core/core-ktx with AGP 7.3 and compileSdk 34'
+            }
+        }
+    }
+}
+
+// Keep Kotlin stdlib aligned with the plugin version expected by bundled plugins
+subprojects { proj ->
+    proj.configurations.all { config ->
+        config.resolutionStrategy.eachDependency { details ->
+            if (details.requested.group == 'org.jetbrains.kotlin' && details.requested.name.startsWith('kotlin-stdlib')) {
+                details.useVersion '1.9.24'
+                details.because 'Ensure Kotlin stdlib matches the toolchain used by plugins like file_picker'
+            }
+        }
+    }
+}
+
+tasks.register("clean", Delete) {
+    delete rootProject.buildDir
+}

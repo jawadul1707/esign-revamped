@@ -1,5 +1,5 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.example.app">
+    package="com.dohatecca.esign">
 
     <uses-permission android:name="android.permission.CAMERA"/>
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
@@ -36,8 +36,20 @@
                 <category android:name="android.intent.category.DEFAULT"/>
                 <category android:name="android.intent.category.BROWSABLE"/>
                 <data
-                    android:scheme="com.example.app"
+                    android:scheme="com.dohatecca.esign"
                     android:host="login-callback" />
+                <data android:scheme="com.dohatecca.esign" android:host="oauth2redirect" />
+            </intent-filter>
+
+            <!-- Accept the app scheme without requiring a specific host.
+                 This helps catch redirects like com.dohatecca.esign://<path>
+                 which can vary across browsers/devices and avoids host
+                 mismatches that can prevent the app from opening. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="com.dohatecca.esign" />
             </intent-filter>
 
             <intent-filter>

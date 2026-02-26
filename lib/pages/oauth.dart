@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:crypto/crypto.dart';
@@ -10,7 +11,6 @@ import 'package:uni_links/uni_links.dart';
 import 'package:crypt/pages/dashboard.dart';
 import 'dart:io';
 import 'global_variable.dart' as globals;
-
 
 Map<String, dynamic>? decodeJwtPart(String part) {
   try {
@@ -270,23 +270,95 @@ class OAuthService {
         'prompt': 'login',
       });
 
+      bool launched = false;
+
+      // Try standard launch first
       if (await canLaunchUrl(authUri)) {
         await launchUrl(authUri, mode: LaunchMode.externalApplication);
+        launched = true;
         _storedCodeVerifier = codeVerifier;
         _storedState = state;
         if (kDebugMode) {
           print('Stored State: $_storedState');
         }
       } else {
+        // Fallback: try to open Chrome explicitly on Android
+        if (Platform.isAndroid) {
+          try {
+            // Chrome package identifier on Android
+            final chromeUri =
+                authUri.toString().replaceFirst('https://', 'googlechrome://');
+            if (await canLaunchUrl(Uri.parse(chromeUri))) {
+              await launchUrl(Uri.parse(chromeUri),
+                  mode: LaunchMode.externalApplication);
+              launched = true;
+              _storedCodeVerifier = codeVerifier;
+              _storedState = state;
+              if (kDebugMode) {
+                print('Opened via Chrome fallback');
+              }
+            }
+          } catch (e) {
+            if (kDebugMode) {
+              print('Chrome fallback failed: $e');
+            }
+          }
+        }
+      }
+
+      // If launch still failed, show error dialog
+      if (!launched) {
         if (kDebugMode) {
-          print('Could not launch $authUri');
+          print('Could not launch $authUri via any method');
+        }
+        if (context.mounted) {
+          _showBrowserNotFoundDialog(context, authUri.toString());
         }
       }
     } catch (e) {
       if (kDebugMode) {
         print('Error launching auth URL: $e');
       }
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: ${e.toString()}')),
+        );
+      }
     }
+  }
+
+  void _showBrowserNotFoundDialog(BuildContext context, String authUrl) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Browser Not Found'),
+        content: const Text(
+          'No default browser is configured on your device. '
+          'Please install and set a default browser (Chrome, Firefox, etc.), '
+          'then try again.\n\n'
+          'Alternatively, you can copy the login URL and open it manually in any browser.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Dismiss'),
+          ),
+          TextButton(
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: authUrl));
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                      content: Text('Login URL copied to clipboard')),
+                );
+                Navigator.pop(context);
+              }
+            },
+            child: const Text('Copy URL'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> clearBrowserSession() async {
@@ -297,9 +369,7 @@ class OAuthService {
 
     // Use the Uri constructor to handle encoding automatically
     // The scheme must match what the app listens for (double slash).
-    final logoutUri =
-        Uri.parse('${globals.authuri}/connect/logout')
-            .replace(
+    final logoutUri = Uri.parse('${globals.authuri}/connect/logout').replace(
       queryParameters: {
         'id_token_hint': globals.idToken,
         'post_logout_redirect_uri': 'com.dohatecca.esign://oauth2redirect',

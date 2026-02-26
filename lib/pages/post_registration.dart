@@ -6,12 +6,10 @@ class EndPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-      ),
-      home: const ThankYouPage(),
-    );
+    // Do not create a new MaterialApp – use the existing app's theme and
+    // navigation stack.  This prevents theme overrides that changed button
+    // colors when returning from the thank-you screen.
+    return const ThankYouPage();
   }
 }
 
@@ -51,7 +49,7 @@ class ThankYouPage extends StatelessWidget {
                     ),
                     SizedBox(height: 10), // Space between text
                     Text(
-                      'Please visit e-sign.com.bd from your PC/Laptop browser to login.',
+                      'Return to the homepage and log in to access your account.',
                       style: TextStyle(fontSize: 16, color: Color(0xFF005D99)),
                       textAlign: TextAlign.center,
                     ),
@@ -65,10 +63,11 @@ class ThankYouPage extends StatelessWidget {
               height: 40,
               child: ElevatedButton(
                 onPressed: () {
-                  Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                          builder: (context) => const HomePage()));
+                  // Pop all previous routes and go to the root (home) route
+                  Navigator.of(context).pushNamedAndRemoveUntil(
+                    '/',
+                    (route) => false,
+                  );
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF005D99), // Button background color

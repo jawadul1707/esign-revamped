@@ -270,38 +270,59 @@ class OAuthService {
         'prompt': 'login',
       });
 
+      if (kDebugMode) {
+        print('Auth URL: ${authUri.toString()}');
+      }
+
       bool launched = false;
 
       // Try standard launch first
-      if (await canLaunchUrl(authUri)) {
-        await launchUrl(authUri, mode: LaunchMode.externalApplication);
-        launched = true;
-        _storedCodeVerifier = codeVerifier;
-        _storedState = state;
+      try {
+        bool canLaunch = await canLaunchUrl(authUri);
         if (kDebugMode) {
-          print('Stored State: $_storedState');
+          print('canLaunchUrl result: $canLaunch');
         }
-      } else {
-        // Fallback: try to open Chrome or Firefox explicitly on Android
-        if (Platform.isAndroid) {
-          bool chromeOpened = await _tryOpenInChrome(authUri);
-          if (chromeOpened) {
+
+        if (canLaunch) {
+          await launchUrl(authUri, mode: LaunchMode.externalApplication);
+          launched = true;
+          _storedCodeVerifier = codeVerifier;
+          _storedState = state;
+          if (kDebugMode) {
+            print('Stored State: $_storedState');
+          }
+        }
+      } catch (e) {
+        if (kDebugMode) {
+          print('Standard launch threw exception: $e');
+        }
+      }
+
+      // If standard launch failed, try fallbacks
+      if (!launched && Platform.isAndroid) {
+        if (kDebugMode) {
+          print('Standard launch failed, trying Chrome fallback...');
+        }
+        bool chromeOpened = await _tryOpenInChrome(authUri);
+        if (chromeOpened) {
+          launched = true;
+          _storedCodeVerifier = codeVerifier;
+          _storedState = state;
+          if (kDebugMode) {
+            print('Opened via Chrome');
+          }
+        } else {
+          // Try Firefox fallback
+          if (kDebugMode) {
+            print('Chrome fallback failed, trying Firefox...');
+          }
+          bool firefoxOpened = await _tryOpenInFirefox(authUri);
+          if (firefoxOpened) {
             launched = true;
             _storedCodeVerifier = codeVerifier;
             _storedState = state;
             if (kDebugMode) {
-              print('Opened via Chrome');
-            }
-          } else {
-            // Try Firefox fallback
-            bool firefoxOpened = await _tryOpenInFirefox(authUri);
-            if (firefoxOpened) {
-              launched = true;
-              _storedCodeVerifier = codeVerifier;
-              _storedState = state;
-              if (kDebugMode) {
-                print('Opened via Firefox');
-              }
+              print('Opened via Firefox');
             }
           }
         }
@@ -332,27 +353,44 @@ class OAuthService {
     try {
       // Try Chrome with intent scheme (Android-specific)
       final String url = authUri.toString();
-      final String chromeUrl = 'intent: $url#Intent;scheme=https;package=com.android.chrome;end';
-      if (await canLaunchUrl(Uri.parse(chromeUrl))) {
-        await launchUrl(Uri.parse(chromeUrl), mode: LaunchMode.externalApplication);
+      final String chromeUrl =
+          'intent: $url#Intent;scheme=https;package=com.android.chrome;end';
+      if (kDebugMode) {
+        print('Trying Chrome intent: $chromeUrl');
+      }
+      bool canLaunchChrome = await canLaunchUrl(Uri.parse(chromeUrl));
+      if (kDebugMode) {
+        print('canLaunchUrl Chrome intent: $canLaunchChrome');
+      }
+      if (canLaunchChrome) {
+        await launchUrl(Uri.parse(chromeUrl),
+            mode: LaunchMode.externalApplication);
         return true;
       }
     } catch (e) {
       if (kDebugMode) print('Chrome intent failed: $e');
     }
-    
+
     // Fallback: try googlechrome:// scheme
     try {
       final String url = authUri.toString();
       final String chromeUrl = url.replaceFirst('https://', 'googlechrome://');
-      if (await canLaunchUrl(Uri.parse(chromeUrl))) {
-        await launchUrl(Uri.parse(chromeUrl), mode: LaunchMode.externalApplication);
+      if (kDebugMode) {
+        print('Trying Chrome googlechrome:// scheme: $chromeUrl');
+      }
+      bool canLaunchChrome = await canLaunchUrl(Uri.parse(chromeUrl));
+      if (kDebugMode) {
+        print('canLaunchUrl Chrome googlechrome://: $canLaunchChrome');
+      }
+      if (canLaunchChrome) {
+        await launchUrl(Uri.parse(chromeUrl),
+            mode: LaunchMode.externalApplication);
         return true;
       }
     } catch (e) {
       if (kDebugMode) print('Chrome googlechrome:// scheme failed: $e');
     }
-    
+
     return false;
   }
 
@@ -360,27 +398,44 @@ class OAuthService {
     try {
       final String url = authUri.toString();
       // Firefox uses intent scheme on Android
-      final String firefoxUrl = 'intent: $url#Intent;scheme=https;package=org.mozilla.firefox;end';
-      if (await canLaunchUrl(Uri.parse(firefoxUrl))) {
-        await launchUrl(Uri.parse(firefoxUrl), mode: LaunchMode.externalApplication);
+      final String firefoxUrl =
+          'intent: $url#Intent;scheme=https;package=org.mozilla.firefox;end';
+      if (kDebugMode) {
+        print('Trying Firefox intent: $firefoxUrl');
+      }
+      bool canLaunchFirefox = await canLaunchUrl(Uri.parse(firefoxUrl));
+      if (kDebugMode) {
+        print('canLaunchUrl Firefox intent: $canLaunchFirefox');
+      }
+      if (canLaunchFirefox) {
+        await launchUrl(Uri.parse(firefoxUrl),
+            mode: LaunchMode.externalApplication);
         return true;
       }
     } catch (e) {
       if (kDebugMode) print('Firefox intent failed: $e');
     }
-    
+
     // Fallback: try firefox:// scheme
     try {
       final String url = authUri.toString();
       final String firefoxUrl = url.replaceFirst('https://', 'firefox://');
-      if (await canLaunchUrl(Uri.parse(firefoxUrl))) {
-        await launchUrl(Uri.parse(firefoxUrl), mode: LaunchMode.externalApplication);
+      if (kDebugMode) {
+        print('Trying Firefox firefox:// scheme: $firefoxUrl');
+      }
+      bool canLaunchFirefox = await canLaunchUrl(Uri.parse(firefoxUrl));
+      if (kDebugMode) {
+        print('canLaunchUrl Firefox firefox://: $canLaunchFirefox');
+      }
+      if (canLaunchFirefox) {
+        await launchUrl(Uri.parse(firefoxUrl),
+            mode: LaunchMode.externalApplication);
         return true;
       }
     } catch (e) {
       if (kDebugMode) print('Firefox firefox:// scheme failed: $e');
     }
-    
+
     return false;
   }
 

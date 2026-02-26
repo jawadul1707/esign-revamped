@@ -11,14 +11,6 @@ import 'package:crypt/pages/dashboard.dart';
 import 'dart:io';
 import 'global_variable.dart' as globals;
 
-class MyHttpOverrides extends HttpOverrides {
-  @override
-  HttpClient createHttpClient(SecurityContext? context) {
-    return super.createHttpClient(context)
-      ..badCertificateCallback =
-          (X509Certificate cert, String host, int port) => true;
-  }
-}
 
 Map<String, dynamic>? decodeJwtPart(String part) {
   try {
@@ -40,9 +32,7 @@ class StatsService {
       String accessToken, String userId) async {
     var headers = {'Authorization': 'Bearer $accessToken'};
     var request = http.MultipartRequest(
-        'GET',
-        Uri.parse(
-            'https://staging-gw.e-sign.com.bd:9100/sign-service/api/v1/stats/$userId'));
+        'GET', Uri.parse('${globals.uri}/sign-service/api/v1/stats/$userId'));
 
     request.headers.addAll(headers);
 
@@ -73,7 +63,7 @@ class BalanceService {
     var request = http.Request(
         'GET',
         Uri.parse(
-            'https://staging-gw.e-sign.com.bd:9100/billing-service/api/v1/subscription/balance/$userId'));
+            '${globals.uri}/billing-service/api/v1/subscription/balance/$userId'));
 
     request.headers.addAll(headers);
 
@@ -134,12 +124,10 @@ class UserService {
 }
 
 class OAuthService {
-  static const String authUrl =
-      'https://staging-auth.e-sign.com.bd:9104/oauth2/authorize';
-  static const String tokenUrl =
-      'https://staging-auth.e-sign.com.bd:9104/oauth2/token';
-  static const String clientId = 'esign_mobile';
-  static const String redirectUri = 'com.example.app://login-callback';
+  static final String authUrl = '${globals.authuri}/oauth2/authorize';
+  static final String tokenUrl = '${globals.authuri}/oauth2/token';
+  static const String clientId = 'esign-mobile-dc';
+  static const String redirectUri = 'com.dohatecca.esign://login-callback';
   static const String scope = 'openid email profile';
 
   String? _storedCodeVerifier;
@@ -185,6 +173,9 @@ class OAuthService {
   Future<void> _initDeepLinkListener() async {
     try {
       final initialUri = await getInitialUri();
+      if (kDebugMode) {
+        print('Initial URI from getInitialUri(): $initialUri');
+      }
       if (initialUri != null) {
         _handleDeepLink(initialUri);
       }
@@ -206,24 +197,50 @@ class OAuthService {
   }
 
   void _handleDeepLink(Uri uri) {
-    if (uri.scheme == 'com.example.app' && uri.host == 'login-callback') {
-      final authCode = uri.queryParameters['code'];
-      final state = uri.queryParameters['state'];
-      if (authCode != null && state != null) {
-        // Context must be provided externally (e.g., via startAuthorizationFlow)
-        if (_lastContext != null) {
-          exchangeCodeForToken(authCode, state, _lastContext!);
-        } else {
-          if (kDebugMode) {
-            print('No BuildContext available for navigation');
+    if (kDebugMode) {
+      print('Deep link received: $uri');
+    }
+
+    // Check the scheme first (ensure it matches the registered intent/URI scheme)
+    if (uri.scheme == 'com.dohatecca.esign') {
+      // 1. Handle LOGIN (host: login-callback)
+      if (uri.host == 'login-callback') {
+        final authCode = uri.queryParameters['code'];
+        final state = uri.queryParameters['state'];
+
+        if (authCode != null && state != null) {
+          if (_lastContext != null) {
+            // Show loading and exchange code
+            _showLoadingDialog(_lastContext!);
+            exchangeCodeForToken(authCode, state, _lastContext!);
           }
         }
-      } else {
+      }
+
+      // 2. Handle LOGOUT (host: oauth2redirect)
+      else if (uri.host == 'oauth2redirect') {
         if (kDebugMode) {
-          print('Missing code or state in deep link');
+          print('User returned from successful logout');
+        }
+
+        if (_lastContext != null && _lastContext!.mounted) {
+          // Navigate back to the very first screen (usually login/home)
+          Navigator.of(_lastContext!).pushNamedAndRemoveUntil(
+            '/',
+            (route) => false,
+          );
         }
       }
     }
+  }
+
+// Helper to keep code clean
+  void _showLoadingDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
   }
 
   BuildContext? _lastContext;
@@ -249,10 +266,12 @@ class OAuthService {
         'state': state,
         'code_challenge': codeChallenge,
         'code_challenge_method': 'S256',
+        // force the authorization server to show the login form every time
+        'prompt': 'login',
       });
 
       if (await canLaunchUrl(authUri)) {
-        await launchUrl(authUri, mode: LaunchMode.inAppBrowserView);
+        await launchUrl(authUri, mode: LaunchMode.externalApplication);
         _storedCodeVerifier = codeVerifier;
         _storedState = state;
         if (kDebugMode) {
@@ -267,6 +286,32 @@ class OAuthService {
       if (kDebugMode) {
         print('Error launching auth URL: $e');
       }
+    }
+  }
+
+  Future<void> clearBrowserSession() async {
+    if (globals.idToken == null) {
+      debugPrint('Cannot logout: ID Token is null');
+      return;
+    }
+
+    // Use the Uri constructor to handle encoding automatically
+    // The scheme must match what the app listens for (double slash).
+    final logoutUri =
+        Uri.parse('${globals.authuri}/connect/logout')
+            .replace(
+      queryParameters: {
+        'id_token_hint': globals.idToken,
+        'post_logout_redirect_uri': 'com.dohatecca.esign://oauth2redirect',
+      },
+    );
+
+    debugPrint(
+        'Logout URL: $logoutUri'); // Check console to see if it looks correct
+
+    if (await canLaunchUrl(logoutUri)) {
+      // externalApplication is required to access the browser cookies
+      await launchUrl(logoutUri, mode: LaunchMode.externalApplication);
     }
   }
 
@@ -311,8 +356,11 @@ class OAuthService {
         String responseBody = await response.stream.bytesToString();
         var jsonResponse = jsonDecode(responseBody);
         accessToken = jsonResponse['access_token'];
-        globals.accessToken = accessToken; // Store in global variable
+        String? idToken = jsonResponse['id_token'];
+        globals.accessToken = accessToken;
+        globals.idToken = idToken; // Store in global variable
         print('Access Token: $accessToken');
+        print('ID Token: $idToken');
 
         if (accessToken != null) {
           List<String> tokenParts = accessToken!.split('.');
@@ -349,7 +397,7 @@ class OAuthService {
                     globals.mobileNumber = userDetails['phoneNo']?.toString();
                     globals.email = userDetails['email']?.toString();
                     globals.dOB = userDetails['dateOfBirth']?.toString();
-                    globals.name = userDetails['commonName']?.toString();
+                    globals.nameUser = userDetails['commonName']?.toString();
                     globals.father = userDetails['fathersName']?.toString();
                     globals.mother = userDetails['mothersName']?.toString();
                     globals.houseIdentifier =

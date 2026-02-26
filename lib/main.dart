@@ -11,20 +11,24 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-/// Custom HTTP overrides for handling SSL certificates in debug mode.
+/// Custom HTTP overrides for handling SSL certificates.
+///
+/// In this staging application we need to bypass invalid certificates
+/// (self-signed/test certs) for both debug and release builds.  In
+/// production you should remove or tighten this logic.
 class MyHttpOverrides extends HttpOverrides {
   @override
   HttpClient createHttpClient(SecurityContext? context) {
     final client = super.createHttpClient(context);
-    if (kDebugMode) {
-      client.badCertificateCallback =
-          (X509Certificate cert, String host, int port) {
-        if (kDebugMode) {
-          print('Allowing certificate for $host:$port in debug mode');
-        }
-        return true;
-      };
-    }
+    // Always allow bad certificates (staging environment)
+    client.badCertificateCallback =
+        (X509Certificate cert, String host, int port) {
+      // optionally log in debug only
+      if (kDebugMode) {
+        print('Allowing certificate for $host:$port');
+      }
+      return true;
+    };
     return client;
   }
 }

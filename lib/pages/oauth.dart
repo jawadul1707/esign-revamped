@@ -282,25 +282,26 @@ class OAuthService {
           print('Stored State: $_storedState');
         }
       } else {
-        // Fallback: try to open Chrome explicitly on Android
+        // Fallback: try to open Chrome or Firefox explicitly on Android
         if (Platform.isAndroid) {
-          try {
-            // Chrome package identifier on Android
-            final chromeUri =
-                authUri.toString().replaceFirst('https://', 'googlechrome://');
-            if (await canLaunchUrl(Uri.parse(chromeUri))) {
-              await launchUrl(Uri.parse(chromeUri),
-                  mode: LaunchMode.externalApplication);
+          bool chromeOpened = await _tryOpenInChrome(authUri);
+          if (chromeOpened) {
+            launched = true;
+            _storedCodeVerifier = codeVerifier;
+            _storedState = state;
+            if (kDebugMode) {
+              print('Opened via Chrome');
+            }
+          } else {
+            // Try Firefox fallback
+            bool firefoxOpened = await _tryOpenInFirefox(authUri);
+            if (firefoxOpened) {
               launched = true;
               _storedCodeVerifier = codeVerifier;
               _storedState = state;
               if (kDebugMode) {
-                print('Opened via Chrome fallback');
+                print('Opened via Firefox');
               }
-            }
-          } catch (e) {
-            if (kDebugMode) {
-              print('Chrome fallback failed: $e');
             }
           }
         }
@@ -325,6 +326,62 @@ class OAuthService {
         );
       }
     }
+  }
+
+  Future<bool> _tryOpenInChrome(Uri authUri) async {
+    try {
+      // Try Chrome with intent scheme (Android-specific)
+      final String url = authUri.toString();
+      final String chromeUrl = 'intent: $url#Intent;scheme=https;package=com.android.chrome;end';
+      if (await canLaunchUrl(Uri.parse(chromeUrl))) {
+        await launchUrl(Uri.parse(chromeUrl), mode: LaunchMode.externalApplication);
+        return true;
+      }
+    } catch (e) {
+      if (kDebugMode) print('Chrome intent failed: $e');
+    }
+    
+    // Fallback: try googlechrome:// scheme
+    try {
+      final String url = authUri.toString();
+      final String chromeUrl = url.replaceFirst('https://', 'googlechrome://');
+      if (await canLaunchUrl(Uri.parse(chromeUrl))) {
+        await launchUrl(Uri.parse(chromeUrl), mode: LaunchMode.externalApplication);
+        return true;
+      }
+    } catch (e) {
+      if (kDebugMode) print('Chrome googlechrome:// scheme failed: $e');
+    }
+    
+    return false;
+  }
+
+  Future<bool> _tryOpenInFirefox(Uri authUri) async {
+    try {
+      final String url = authUri.toString();
+      // Firefox uses intent scheme on Android
+      final String firefoxUrl = 'intent: $url#Intent;scheme=https;package=org.mozilla.firefox;end';
+      if (await canLaunchUrl(Uri.parse(firefoxUrl))) {
+        await launchUrl(Uri.parse(firefoxUrl), mode: LaunchMode.externalApplication);
+        return true;
+      }
+    } catch (e) {
+      if (kDebugMode) print('Firefox intent failed: $e');
+    }
+    
+    // Fallback: try firefox:// scheme
+    try {
+      final String url = authUri.toString();
+      final String firefoxUrl = url.replaceFirst('https://', 'firefox://');
+      if (await canLaunchUrl(Uri.parse(firefoxUrl))) {
+        await launchUrl(Uri.parse(firefoxUrl), mode: LaunchMode.externalApplication);
+        return true;
+      }
+    } catch (e) {
+      if (kDebugMode) print('Firefox firefox:// scheme failed: $e');
+    }
+    
+    return false;
   }
 
   void _showBrowserNotFoundDialog(BuildContext context, String authUrl) {

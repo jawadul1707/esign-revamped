@@ -9,7 +9,7 @@ Future<Map<String, dynamic>?> generateCertificate() async {
 
   // Validate required fields
   if (accessToken == null ||
-      name == null ||
+      nameUser == null ||
       nidNumber == null ||
       houseIdentifier == null ||
       streetAddress == null ||
@@ -22,7 +22,20 @@ Future<Map<String, dynamic>?> generateCertificate() async {
       keySize == null ||
       validityDaysInFuture == null) {
     if (kDebugMode) {
-      print('Missing required fields for certificate generation');
+      print('❌ Missing required fields for certificate generation:');
+      print('  - accessToken: ${accessToken != null ? "✓" : "✗ MISSING"}');
+      print('  - nameUser: ${nameUser ?? "✗ MISSING"}');
+      print('  - nidNumber: ${nidNumber ?? "✗ MISSING"}');
+      print('  - houseIdentifier: ${houseIdentifier ?? "✗ MISSING"}');
+      print('  - streetAddress: ${streetAddress ?? "✗ MISSING"}');
+      print('  - locality: ${locality ?? "✗ MISSING"}');
+      print('  - state: ${state ?? "✗ MISSING"}');
+      print('  - postalCode: ${postalCode ?? "✗ MISSING"}');
+      print('  - country: ${country ?? "✗ MISSING"}');
+      print('  - email: ${email ?? "✗ MISSING"}');
+      print('  - algorithm: ${algorithm ?? "✗ MISSING"}');
+      print('  - keySize: ${keySize ?? "✗ MISSING"}');
+      print('  - validityDaysInFuture: ${validityDaysInFuture ?? "✗ MISSING"}');
     }
     return null;
   }
@@ -36,7 +49,7 @@ Future<Map<String, dynamic>?> generateCertificate() async {
   // 2. Define the Request Body
   final Map<String, dynamic> body = {
     "password": "123456",
-    "subjectCommonName": name,
+    "subjectCommonName": nameUser,
     "subjectSerialNumberType": "NID",
     "subjectSerialNumberValue": nidNumber.toString(),
     "subjectHouseIdentifier": houseIdentifier,

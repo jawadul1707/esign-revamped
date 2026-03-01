@@ -319,7 +319,7 @@ class _PackageSelectorDialogState extends State<PackageSelectorDialog> {
                         }
 
                         // Generate certificate
-                        await generateCertificate();
+                        final certResult = await generateCertificate();
 
                         // Print certificate serial number
                         if (kDebugMode) {
@@ -328,6 +328,21 @@ class _PackageSelectorDialogState extends State<PackageSelectorDialog> {
                         }
 
                         if (!context.mounted) return;
+
+                        // Validate certificate generation succeeded
+                        if (certResult == null ||
+                            certificateSerialNumber == null) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                  'Failed to generate certificate. Please try again.'),
+                              backgroundColor: Colors.red,
+                              duration: Duration(seconds: 3),
+                            ),
+                          );
+                          return;
+                        }
+
                         Navigator.of(context).pop();
                         widget.onPackageSelected();
                       }

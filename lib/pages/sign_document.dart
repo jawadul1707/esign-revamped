@@ -108,9 +108,9 @@ class PdfViewerState extends State<PdfViewer> {
           _signaturePosition = Offset(clampedLeft, clampedTop);
         });
 
-        // Persist tap coordinates globally
-        signatureX = pdfX;
-        signatureY = pdfY;
+        // Persist tap coordinates globally (convert double to int)
+        signatureX = pdfX.round();
+        signatureY = pdfY.round();
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -123,27 +123,61 @@ class PdfViewerState extends State<PdfViewer> {
     }
   }
 
+  // Helper Method for Icon Buttons
+  Widget _buildIconButton({
+    required IconData icon,
+    required double x,
+    required double y,
+    required String tooltip,
+  }) {
+    return IconButton(
+      icon: Icon(icon, size: 28),
+      tooltip: tooltip,
+      onPressed: () {
+        setState(() {
+          _signaturePosition = _getCornerPosition(x, y);
+          signatureX = x.round();
+          signatureY = y.round();
+        });
+
+        // Feedback for the user
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Placed at $tooltip: ($x, $y)'),
+            duration: const Duration(seconds: 1),
+          ),
+        );
+      },
+    );
+  }
+
+  // Function to calculate signature position for a corner
+  // moved out of build() so other methods can call it
+  Offset _getCornerPosition(double pdfX, double pdfY) {
+    final Size screenSize = MediaQuery.of(context).size;
+    final double containerWidth = screenSize.width - 40;
+    final double containerHeight = screenSize.height - 340; // 200 + 140
+
+    const double pdfWidth = 468.0;
+    const double pdfHeight = 720.0;
+    final double localDx = (pdfX / pdfWidth) * containerWidth;
+    final double localDy =
+        containerHeight - (pdfY / pdfHeight) * containerHeight;
+    final double desiredLeft = 20 + localDx - 30;
+    final double desiredTop = 200 + localDy - 20;
+    final double clampedLeft =
+        desiredLeft.clamp(20, 20 + containerWidth - 80);
+    final double clampedTop =
+        desiredTop.clamp(180, 200 + containerHeight - 60);
+    return Offset(clampedLeft, clampedTop);
+  }
+
   @override
   Widget build(BuildContext context) {
     final Size screenSize = MediaQuery.of(context).size;
     final double containerWidth = screenSize.width - 40;
     final double containerHeight = screenSize.height - 340; // 200 + 140
-
-    // Function to calculate signature position for a corner
-    Offset _getCornerPosition(double pdfX, double pdfY) {
-      const double pdfWidth = 468.0;
-      const double pdfHeight = 720.0;
-      final double localDx = (pdfX / pdfWidth) * containerWidth;
-      final double localDy =
-          containerHeight - (pdfY / pdfHeight) * containerHeight;
-      final double desiredLeft = 20 + localDx - 30;
-      final double desiredTop = 200 + localDy - 20;
-      final double clampedLeft =
-          desiredLeft.clamp(20, 20 + containerWidth - 80);
-      final double clampedTop =
-          desiredTop.clamp(180, 200 + containerHeight - 60);
-      return Offset(clampedLeft, clampedTop);
-    }
 
     return Scaffold(
       backgroundColor: const Color(0xFFC2E7FF),
@@ -190,7 +224,7 @@ class PdfViewerState extends State<PdfViewer> {
                         ),
                       ),
 
-                      // 4 buttons for corners
+                      // 4 directional icon buttons for corners
                       Positioned(
                         top: 150,
                         left: 20,
@@ -198,56 +232,33 @@ class PdfViewerState extends State<PdfViewer> {
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                           children: [
-                            ElevatedButton(
-                              onPressed: () {
-                                setState(() => _signaturePosition =
-                                    _getCornerPosition(0, 720)); // Top Left
-                                signatureX = 0;
-                                signatureY = 720;
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                      content: Text('Placed at: (0, 720)')),
-                                );
-                              },
-                              child: const Text('TL'),
+                            // Top Left
+                            _buildIconButton(
+                              icon: Icons.north_west,
+                              x: 0,
+                              y: 720,
+                              tooltip: 'Top Left',
                             ),
-                            ElevatedButton(
-                              onPressed: () {
-                                setState(() => _signaturePosition =
-                                    _getCornerPosition(468, 720)); // Top Right
-                                signatureX = 468;
-                                signatureY = 720;
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                      content: Text('Placed at: (468, 720)')),
-                                );
-                              },
-                              child: const Text('TR'),
+                            // Top Right
+                            _buildIconButton(
+                              icon: Icons.north_east,
+                              x: 468,
+                              y: 720,
+                              tooltip: 'Top Right',
                             ),
-                            ElevatedButton(
-                              onPressed: () {
-                                setState(() => _signaturePosition =
-                                    _getCornerPosition(0, 0)); // Bottom Left
-                                signatureX = 0;
-                                signatureY = 0;
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('Placed at: (0, 0)')),
-                                );
-                              },
-                              child: const Text('BL'),
+                            // Bottom Left
+                            _buildIconButton(
+                              icon: Icons.south_west,
+                              x: 0,
+                              y: 0,
+                              tooltip: 'Bottom Left',
                             ),
-                            ElevatedButton(
-                              onPressed: () {
-                                setState(() => _signaturePosition =
-                                    _getCornerPosition(468, 0)); // Bottom Right
-                                signatureX = 468;
-                                signatureY = 0;
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                      content: Text('Placed at: (468, 0)')),
-                                );
-                              },
-                              child: const Text('BR'),
+                            // Bottom Right
+                            _buildIconButton(
+                              icon: Icons.south_east,
+                              x: 468,
+                              y: 0,
+                              tooltip: 'Bottom Right',
                             ),
                           ],
                         ),
@@ -264,7 +275,7 @@ class PdfViewerState extends State<PdfViewer> {
                           ),
                         ),
 
-                      /// CONTROLS (UNCHANGED)
+                      /// CONTROLS - Top bar with folder picker on left, page nav in middle
                       Positioned(
                         top: MediaQuery.of(context).padding.top,
                         left: 0,
@@ -276,33 +287,41 @@ class PdfViewerState extends State<PdfViewer> {
                               icon: const Icon(Icons.folder_open),
                               onPressed: _pickPdf,
                             ),
-                            Text('${currentPage + 1} / $totalPages'),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                if (totalPages > 1)
+                                  IconButton(
+                                    icon: const Icon(Icons.chevron_left,
+                                        size: 28),
+                                    onPressed: currentPage > 0
+                                        ? _goToPreviousPage
+                                        : null,
+                                  ),
+                                SizedBox(
+                                  width: 80,
+                                  child: Center(
+                                    child: Text(
+                                      '${currentPage + 1} / $totalPages',
+                                      style: const TextStyle(fontSize: 16),
+                                    ),
+                                  ),
+                                ),
+                                if (totalPages > 1)
+                                  IconButton(
+                                    icon: const Icon(Icons.chevron_right,
+                                        size: 28),
+                                    onPressed: currentPage < totalPages - 1
+                                        ? _goToNextPage
+                                        : null,
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(
+                                width: 48), // Balance for folder icon
                           ],
                         ),
                       ),
-
-                      if (totalPages > 1)
-                        Positioned(
-                          left: 16,
-                          bottom: 20,
-                          child: IconButton(
-                            icon: const Icon(Icons.chevron_left, size: 32),
-                            onPressed:
-                                currentPage > 0 ? _goToPreviousPage : null,
-                          ),
-                        ),
-
-                      if (totalPages > 1)
-                        Positioned(
-                          right: 16,
-                          bottom: 20,
-                          child: IconButton(
-                            icon: const Icon(Icons.chevron_right, size: 32),
-                            onPressed: currentPage < totalPages - 1
-                                ? _goToNextPage
-                                : null,
-                          ),
-                        ),
 
                       // Primary action button placed below the PDF viewer
                       Positioned(
